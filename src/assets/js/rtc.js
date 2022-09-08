@@ -21,7 +21,7 @@ function getParameter(theParameter) {
 
 window.addEventListener( 'load', () => {
 
-    const room = h.getQString( "https://voip.makerstream.com.br/?room=" + getParameter('room'), 'room' );
+    const room = h.getQString( "https://flexinterativa.herokuapp.com/?room=" + getParameter('room'), 'room' );
     const username = getParameter('name');
 
     if ( !room || !getParameter('room')) {
