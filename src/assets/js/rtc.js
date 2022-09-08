@@ -4,27 +4,11 @@
  */
 import h from './helpers.js';
 
-function getParameter(theParameter) {
-    var params = window.location.search.substr(1).split('&');
-  
-    for (var i = 0; i < params.length; i++) {
-        var p = params[i].split('=');
-        if (p[0] == theParameter) {
-            return decodeURIComponent(p[1]);
-        }
-    }
-
-    return false;
-  
-    }
-  
-
 window.addEventListener( 'load', () => {
+    const room = h.getQString( location.href, 'room' );
+    const username = sessionStorage.getItem( 'username' );
 
-    const room = h.getQString( "https://flexinterativa.herokuapp.com/?room=" + getParameter('room'), 'room' );
-    const username = getParameter('name');
-
-    if ( !room || !getParameter('room')) {
+    if ( !room ) {
         document.querySelector( '#room-create' ).attributes.removeNamedItem( 'hidden' );
     }
 
@@ -42,9 +26,9 @@ window.addEventListener( 'load', () => {
         var pc = [];
 
         let socket = io( '/stream' );
-//__${h.generateRandomString()}__${h.generateRandomString()}__
+
         var socketId = '';
-        var randomNumber = ``;
+        var randomNumber = `__${h.generateRandomString()}__${h.generateRandomString()}__`;
         var myStream = '';
         var screen = '';
         var recordedStream = [];
@@ -56,34 +40,27 @@ window.addEventListener( 'load', () => {
 
         socket.on( 'connect', () => {
             //set socketId
-            socketId = `${username}` // (${randomNumber});
+            socketId = socket.io.engine.id;
             document.getElementById('randomNumber').innerText = randomNumber;
 
-            let data = {
+
+            socket.emit( 'subscribe', {
                 room: room,
-                socketId: socketId,
-                sender: `${username}`
-            };
+                socketId: socketId
+            } );
 
-            //(${randomNumber})
-            
-            console.log( 'Meus dados: ' + data.sender)
 
-            socket.emit( 'subscribe', data );
-            
             socket.on( 'new user', ( data ) => {
                 socket.emit( 'newUserStart', { to: data.socketId, sender: socketId } );
-                pc.push( `${username}` );
-               init( true, data.socketId, data );
-        //(${randomNumber})
-            });
+                pc.push( data.socketId );
+                init( true, data.socketId );
+            } );
 
 
             socket.on( 'newUserStart', ( data ) => {
                 pc.push( data.sender );
-               init( false, data.sender, data);
-                console.log( 'Checando: ' +  data.sender)
-            });
+                init( false, data.sender );
+            } );
 
 
             socket.on( 'ice candidates', async ( data ) => {
@@ -145,7 +122,7 @@ window.addEventListener( 'load', () => {
             let data = {
                 room: room,
                 msg: msg,
-                sender: `${username}` //(${randomNumber})
+                sender: `${username} (${randomNumber})`
             };
 
             //emit chat message
@@ -157,15 +134,8 @@ window.addEventListener( 'load', () => {
 
 
 
-        function init( createOffer, partnerName, data) {
-
-
-       
-
+        function init( createOffer, partnerName ) {
             pc[partnerName] = new RTCPeerConnection( h.getIceServer() );
-
-
-            console.log('Data: ' + data.room)
 
             if ( screen && screen.getTracks().length ) {
                 screen.getTracks().forEach( ( track ) => {
@@ -176,7 +146,6 @@ window.addEventListener( 'load', () => {
             else if ( myStream ) {
                 myStream.getTracks().forEach( ( track ) => {
                     pc[partnerName].addTrack( track, myStream );//should trigger negotiationneeded event
-
                 } );
             }
 
@@ -184,7 +153,7 @@ window.addEventListener( 'load', () => {
                 h.getUserFullMedia().then( ( stream ) => {
                     //save my stream
                     myStream = stream;
-               
+
                     stream.getTracks().forEach( ( track ) => {
                         pc[partnerName].addTrack( track, stream );//should trigger negotiationneeded event
                     } );
@@ -205,26 +174,21 @@ window.addEventListener( 'load', () => {
                     await pc[partnerName].setLocalDescription( offer );
 
                     socket.emit( 'sdp', { description: pc[partnerName].localDescription, to: partnerName, sender: socketId } );
-
                 };
             }
 
 
 
             //send ice candidate to partnerNames
-            pc[partnerName].onicecandidate = ( { candidate} ) => {
-               
+            pc[partnerName].onicecandidate = ( { candidate } ) => {
                 socket.emit( 'ice candidates', { candidate: candidate, to: partnerName, sender: socketId } );
-               
             };
 
 
 
             //add
             pc[partnerName].ontrack = ( e ) => {
-
                 let str = e.streams[0];
-
                 if ( document.getElementById( `${ partnerName }-video` ) ) {
                     document.getElementById( `${ partnerName }-video` ).srcObject = str;
                 }
@@ -235,24 +199,12 @@ window.addEventListener( 'load', () => {
                     newVid.id = `${ partnerName }-video`;
                     newVid.srcObject = str;
                     newVid.autoplay = true;
-                    newVid.muted = false;
-                    newVid.volume = 0;
                     newVid.className = 'remote-video';
-
-if(newVid.muted){
-
-    var ism = 'fa-microphone-slash';
-
-}else{
-
-var ism = 'fa-microphone';
-
-}
 
                     //video controls elements
                     let controlDiv = document.createElement( 'div' );
                     controlDiv.className = 'remote-video-controls';
-                    controlDiv.innerHTML = `${ partnerName }<i class="fa ` + ism + ` text-white pr-3 mute-remote-mic" title="Mute"></i>
+                    controlDiv.innerHTML = `<i class="fa fa-microphone text-white pr-3 mute-remote-mic" title="Mute"></i>
                         <i class="fa fa-expand text-white expand-remote-video" title="Expand"></i>`;
 
                     //create a new div for card
